@@ -104,6 +104,7 @@ migrate -path ./migrations -database "postgres://user:password@localhost:5432/ri
 - Integração com API da Riot Games ✔️
 - Cálculo de win rate dos jogadores ️️ ✔️
 - Implementar buscas concorrentes ️️ ✔️
+- Integrar com bot discord
 - Ranqueamento de times
 - Autenticação e controle de acesso
 
