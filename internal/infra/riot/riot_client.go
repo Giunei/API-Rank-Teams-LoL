@@ -4,7 +4,10 @@ import (
 	"APIRankLolV2/internal/util"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
+	"strconv"
+	"time"
 )
 
 type RiotClient struct {
@@ -102,13 +105,28 @@ func (r *RiotClient) GetMatchDetail(matchID string) (*MatchResponse, error) {
 		return nil, err
 	}
 	req.Header.Set("X-Riot-Token", r.apiKey)
+
 	resp, err := r.client.Do(req)
 	if err != nil {
 		return nil, err
 	}
 	defer resp.Body.Close()
+
 	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("riot API error: %d", resp.StatusCode)
+
+		if resp.StatusCode == 429 {
+			retryAfter := resp.Header.Get("Retry-After")
+			if seconds, err := strconv.Atoi(retryAfter); err == nil {
+				fmt.Printf("Rate limit para %s. Tempo necessário para a próxima busca: %d segundos\n", matchID, seconds)
+				time.Sleep(time.Duration(seconds) * time.Second)
+			}
+		}
+
+		body, _ := io.ReadAll(resp.Body)
+		return nil, &util.HttpError{
+			StatusCode: resp.StatusCode,
+			Msg:        string(body),
+		}
 	}
 	var match MatchResponse
 	if err := json.NewDecoder(resp.Body).Decode(&match); err != nil {

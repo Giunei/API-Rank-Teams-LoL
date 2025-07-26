@@ -3,9 +3,14 @@ package usecase
 import (
 	"APIRankLolV2/internal/domain"
 	"APIRankLolV2/internal/infra/riot"
+	"APIRankLolV2/internal/util"
 	"context"
+	"errors"
 	"fmt"
+	"net/http"
 	"strconv"
+	"sync"
+	"time"
 )
 
 type TeamService struct {
@@ -34,12 +39,7 @@ func (s *TeamService) CreateTeam(ctx context.Context, team domain.Team) error {
 }
 
 func (s *TeamService) AddPlayerToTeam(ctx context.Context, teamIDParam string, player domain.Player) error {
-	teamID, err := strconv.ParseInt(teamIDParam, 10, 64)
-
-	if err != nil {
-		fmt.Println("Erro ao converter:", err)
-		return err
-	}
+	teamID := util.StringToInt64(teamIDParam)
 
 	account, err := s.riotClient.GetAccountByRiotID(player.GamerName, player.TagLine)
 	if err != nil {
@@ -85,7 +85,7 @@ func (s *TeamService) GetPlayerById(ctx context.Context, playerID int64) (domain
 }
 
 func (s *TeamService) CalculateWinRateTeam(ctx context.Context, teamID, countStr, typeFilter, queueFilter string) (float64, error) {
-	teamIdInt, _ := strconv.ParseInt(teamID, 10, 64)
+	teamIdInt := util.StringToInt64(teamID)
 	players, err := s.repo.FindPlayersByTeamID(ctx, teamIdInt)
 
 	if err != nil {
@@ -116,7 +116,7 @@ func (s *TeamService) CalculateWinRate(ctx context.Context, playerID, countStr, 
 		return 0, fmt.Errorf("invalid count parameter")
 	}
 
-	playerIDInt, _ := strconv.ParseInt(playerID, 10, 64)
+	playerIDInt := util.StringToInt64(playerID)
 
 	player, err := s.GetPlayerById(ctx, playerIDInt)
 	if err != nil {
@@ -127,15 +127,85 @@ func (s *TeamService) CalculateWinRate(ctx context.Context, playerID, countStr, 
 	if err != nil {
 		return 0, fmt.Errorf("failed to fetch match IDs: %w", err)
 	}
-	wins := 0
-	total := 0
-	for _, matchID := range matchIDs {
-		match, err := s.riotClient.GetMatchDetail(matchID)
-		if err != nil {
-			continue // ignora erros individuais
+
+	start := time.Now()
+
+	matches := s.buscarPartidasConcorrentemente(matchIDs, 3)
+
+	duration := time.Since(start)
+	fmt.Printf("Tempo da execução sequencial: %v\n", duration)
+
+	winrate := calcularWinrate(matches, player.Puuid)
+	fmt.Printf("Winrate: %.2f%%\n", winrate)
+	return winrate, nil
+}
+
+func (s *TeamService) buscarDetalhesPartidaComRetry(matchID string, tentativas int) (*riot.MatchResponse, error) {
+	var err error
+	var match *riot.MatchResponse
+
+	for i := 0; i < tentativas; i++ {
+		match, err = s.riotClient.GetMatchDetail(matchID)
+		if err == nil {
+			return match, nil
 		}
+
+		var httpErr *util.HttpError
+		if errors.As(err, &httpErr) && httpErr.StatusCode == http.StatusTooManyRequests {
+			wait := time.Duration((i+1)*2) * time.Second // Ex: 2s, 4s, 6s
+			fmt.Printf("Rate limit para %s. Tentativa %d. Esperando %v...\n", matchID, i+1, wait)
+			time.Sleep(wait)
+			continue
+		}
+		break
+	}
+	return nil, err
+}
+
+func (s *TeamService) buscarPartidasConcorrentemente(matchIDs []string, maxConcorrentes int) []riot.MatchResponse {
+	var wg sync.WaitGroup
+	var mu sync.Mutex
+
+	semaforo := make(chan struct{}, maxConcorrentes) // controla a quantidade de goroutines ativas
+	resultados := make([]riot.MatchResponse, 0)
+
+	for _, matchID := range matchIDs {
+		wg.Add(1)
+
+		go func(id string) {
+			defer wg.Done()
+			semaforo <- struct{}{} // ocupa vaga
+
+			defer func() { <-semaforo }() // libera vaga
+
+			partida, err := s.buscarDetalhesPartidaComRetry(id, 5)
+			if err != nil {
+				if err.Error() == "429 Too Many Requests" {
+					fmt.Println("Rate limit atingido. Retentando após pausa...")
+					time.Sleep(5 * time.Second) // espera antes de continuar
+					// OBS: poderia colocar lógica para reenqueue ou retry aqui
+					return
+				}
+				fmt.Printf("Erro ao buscar %s: %v\n", id, err)
+				return
+			}
+
+			mu.Lock()
+			resultados = append(resultados, *partida)
+			mu.Unlock()
+		}(matchID)
+	}
+
+	wg.Wait()
+	return resultados
+}
+
+func calcularWinrate(matches []riot.MatchResponse, puuid string) float64 {
+	total, wins := 0, 0
+
+	for _, match := range matches {
 		for _, p := range match.Info.Participants {
-			if p.Puuid == player.Puuid {
+			if p.Puuid == puuid {
 				total++
 
 				fmt.Printf("%s -> Champion: %s | Vitória? %t | Tipo: %s\n", p.RiotIdGameName, p.Champion, p.Win, match.Info.QueueName)
@@ -147,10 +217,8 @@ func (s *TeamService) CalculateWinRate(ctx context.Context, playerID, countStr, 
 		}
 	}
 	if total == 0 {
-		return 0, fmt.Errorf("no valid matches found")
+		return 0
 	}
 
-	winrate := (float64(wins) / float64(total)) * 100
-	fmt.Printf("Winrate: %.2f%%\n", winrate)
-	return winrate, nil
+	return (float64(wins) / float64(total)) * 100
 }
