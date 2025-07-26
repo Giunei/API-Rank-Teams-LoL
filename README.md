@@ -20,8 +20,20 @@ Este projeto é um backend em Go que permite criar times com jogadores do LoL e 
 - `internal/adapter/` – handlers HTTP e repositórios de banco
 - `internal/usecase/` – regras de negócio
 - `internal/domain/` – entidades e interfaces
+- `internal/util/` – utilitários para o código
 - `configs/` – configuração de banco
 - `migrations/` – arquivos SQL para criação das tabelas
+
+---
+
+## 🔴️ Necessário criar o .env.dev!!
+
+Por segurança não foi colocado o arquivo .env.dev no projeto, ele deve conter a variável
+responsável por armazenar a chave de acesso para o portal de desenvolvimento da API da Riot.
+
+Adicione esse arquivo na pasta raiz, e digite o seguinte: `RIOT_API_KEY=SENHA`
+
+Substitua **SENHA** pela chave do portal da API, você consegue ela no [Riot Developer Portal](https://developer.riotgames.com/)
 
 ---
 
@@ -87,10 +99,11 @@ migrate -path ./migrations -database "postgres://user:password@localhost:5432/ri
 
 ---
 
-## ✅ Próximos passos
+## ✅🚀 Próximos passos
 
-- Integração com API da Riot Games
-- Cálculo de win rate dos jogadores
+- Integração com API da Riot Games ✔️
+- Cálculo de win rate dos jogadores ️️ ✔️
+- Implementar buscas concorrentes ️️ ✔️
 - Ranqueamento de times
 - Autenticação e controle de acesso
 

@@ -180,12 +180,6 @@ func (s *TeamService) buscarPartidasConcorrentemente(matchIDs []string, maxConco
 
 			partida, err := s.buscarDetalhesPartidaComRetry(id, 5)
 			if err != nil {
-				if err.Error() == "429 Too Many Requests" {
-					fmt.Println("Rate limit atingido. Retentando após pausa...")
-					time.Sleep(5 * time.Second) // espera antes de continuar
-					// OBS: poderia colocar lógica para reenqueue ou retry aqui
-					return
-				}
 				fmt.Printf("Erro ao buscar %s: %v\n", id, err)
 				return
 			}
