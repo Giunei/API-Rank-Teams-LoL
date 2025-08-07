@@ -9,7 +9,7 @@ type Player struct {
 }
 
 type Team struct {
-	ID      int64  `db:\"id\"`
-	Name    string `db:\"name\"`
+	ID      int64  `db:"id"`
+	Name    string `db:"name"`
 	Players []Player
 }

@@ -10,43 +10,15 @@ import (
 )
 
 type TeamRepository struct {
-	db *sqlx.DB
+	Db *sqlx.DB
 }
 
 func NewTeamRepository(db *sqlx.DB) *TeamRepository {
-	return &TeamRepository{db: db}
-}
-
-func (r *TeamRepository) Save(ctx context.Context, team domain.Team) error {
-	tx, err := r.db.BeginTxx(ctx, nil)
-	if err != nil {
-		return err
-	}
-	defer tx.Rollback()
-
-	fmt.Println("inserindo...")
-
-	var teamID int64
-	err = tx.QueryRowContext(ctx, "INSERT INTO team (name) VALUES ($1) RETURNING id", team.Name).Scan(&teamID)
-	if err != nil {
-		return err
-	}
-
-	for _, p := range team.Players {
-		_, err := tx.ExecContext(ctx,
-			"INSERT INTO player (gamer_name, tag_line, team_id) VALUES ($1, $2, $3)",
-			p.GamerName, p.TagLine, teamID,
-		)
-		if err != nil {
-			return err
-		}
-	}
-
-	return tx.Commit()
+	return &TeamRepository{Db: db}
 }
 
 func (r *TeamRepository) SaveTeam(ctx context.Context, team domain.Team) (int64, error) {
-	tx, err := r.db.BeginTxx(ctx, nil)
+	tx, err := r.Db.BeginTxx(ctx, nil)
 	if err != nil {
 		return 0, err
 	}
@@ -63,7 +35,7 @@ func (r *TeamRepository) SaveTeam(ctx context.Context, team domain.Team) (int64,
 }
 
 func (r *TeamRepository) SavePlayer(ctx context.Context, p domain.Player) error {
-	tx, err := r.db.BeginTxx(ctx, nil)
+	tx, err := r.Db.BeginTxx(ctx, nil)
 	if err != nil {
 		return err
 	}
@@ -86,6 +58,27 @@ func (r *TeamRepository) SavePlayer(ctx context.Context, p domain.Player) error 
 	return tx.Commit()
 }
 
+func (r *TeamRepository) UpdatePlayer(ctx context.Context, p domain.Player) error {
+	if p.ID == 0 {
+		return fmt.Errorf("ID do player não pode ser zero")
+	}
+
+	query := `
+		UPDATE player
+		SET gamer_name = :gamer_name,
+		    tag_line = :tag_line,
+		    puuid = :puuid
+		WHERE id = :id
+	`
+
+	_, err := r.Db.NamedExecContext(ctx, query, p)
+	if err != nil {
+		return fmt.Errorf("erro ao atualizar player: %w", err)
+	}
+
+	return nil
+}
+
 func (r *TeamRepository) FindPlayersByGamerName(ctx context.Context, gamerName string) ([]domain.Player, error) {
 	var players []domain.Player
 	query := `
@@ -93,7 +86,7 @@ func (r *TeamRepository) FindPlayersByGamerName(ctx context.Context, gamerName s
 		FROM player
 		WHERE gamer_name ILIKE '%' || $1 || '%'
 	`
-	err := r.db.SelectContext(ctx, &players, query, gamerName)
+	err := r.Db.SelectContext(ctx, &players, query, gamerName)
 	return players, err
 }
 
@@ -104,7 +97,7 @@ func (r *TeamRepository) FindPlayersByTeamID(ctx context.Context, teamID int64) 
 		FROM player
 		WHERE team_id = $1
 	`
-	err := r.db.SelectContext(ctx, &players, query, teamID)
+	err := r.Db.SelectContext(ctx, &players, query, teamID)
 	return players, err
 }
 
@@ -115,7 +108,7 @@ func (r *TeamRepository) FindPlayerByID(ctx context.Context, playerID int64) (do
 		FROM player
 		WHERE id = $1
 	`
-	err := r.db.GetContext(ctx, &player, query, playerID)
+	err := r.Db.GetContext(ctx, &player, query, playerID)
 
 	return player, err
 }

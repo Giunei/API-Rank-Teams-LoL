@@ -13,6 +13,8 @@ import (
 	"time"
 )
 
+var ErrPlayerNotFound = errors.New("player not found")
+
 type TeamService struct {
 	repo       domain.TeamRepository
 	riotClient *riot.RiotClient
@@ -41,14 +43,20 @@ func (s *TeamService) CreateTeam(ctx context.Context, team domain.Team) error {
 func (s *TeamService) AddPlayerToTeam(ctx context.Context, teamIDParam string, player domain.Player) error {
 	teamID := util.StringToInt64(teamIDParam)
 
-	account, err := s.riotClient.GetAccountByRiotID(player.GamerName, player.TagLine)
-	if err != nil {
-		return fmt.Errorf("falha ao buscar PUUID na Riot API: %w", err)
-	}
-	player.Puuid = account.Puuid
-	player.TeamID = teamID
+	playerBuscado, err := s.GetPlayerById(ctx, teamID)
+	if errors.Is(err, ErrPlayerNotFound) {
+		account, err := s.riotClient.GetAccountByRiotID(player.GamerName, player.TagLine)
+		if err != nil {
+			return fmt.Errorf("falha ao buscar PUUID na Riot API: %w", err)
+		}
+		player.Puuid = account.Puuid
+		player.TeamID = teamID
 
-	return s.SavePlayer(ctx, player)
+		return s.SavePlayer(ctx, player)
+	}
+
+	player.ID = playerBuscado.ID
+	return s.repo.UpdatePlayer(ctx, player)
 }
 
 func (s *TeamService) SavePlayer(ctx context.Context, player domain.Player) error {
@@ -62,23 +70,7 @@ func (s *TeamService) GetPlayersByGamerName(ctx context.Context, gamerName strin
 func (s *TeamService) GetPlayerById(ctx context.Context, playerID int64) (domain.Player, error) {
 	player, err := s.repo.FindPlayerByID(ctx, playerID)
 	if err != nil {
-		return player, fmt.Errorf("player not found: %w", err)
-	}
-
-	if player.Puuid == "" {
-		account, err := s.riotClient.GetAccountByRiotID(player.GamerName, player.TagLine)
-
-		if err != nil {
-			return player, err
-		}
-
-		player.Puuid = account.Puuid
-
-		err = s.SavePlayer(ctx, player)
-
-		if err != nil {
-			return player, err
-		}
+		return player, fmt.Errorf("%w: %v", ErrPlayerNotFound, err)
 	}
 
 	return player, nil

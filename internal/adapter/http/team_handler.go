@@ -10,19 +10,6 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-func DataBasePlayersGaplandia() domain.Team {
-	return domain.Team{
-		Name: "Gaplandia",
-		Players: []domain.Player{
-			{TagLine: "br1", GamerName: "phini"},
-			{TagLine: "pixys", GamerName: "hampstead"},
-			{TagLine: "pixys", GamerName: "thumpy"},
-			{TagLine: "br1", GamerName: "debocholandia"},
-			{TagLine: "unhe", GamerName: "bebe reborn"},
-		},
-	}
-}
-
 func RegisterTeamRoutes(router *gin.Engine, svc *usecase.TeamService) {
 	fmt.Println("registrando rotas de team")
 	router.POST("/teams", func(c *gin.Context) {
