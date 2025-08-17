@@ -67,6 +67,10 @@ func (s *TeamService) GetPlayersByGamerName(ctx context.Context, gamerName strin
 	return s.repo.FindPlayersByGamerName(ctx, gamerName)
 }
 
+func (s *TeamService) GetAllPlayersByTeamID(ctx context.Context, teamID string) ([]domain.Player, error) {
+	return s.repo.FindAllPlayersByTeamID(ctx, util.StringToInt64(teamID))
+}
+
 func (s *TeamService) GetPlayerById(ctx context.Context, playerID int64) (domain.Player, error) {
 	player, err := s.repo.FindPlayerByID(ctx, playerID)
 	if err != nil {

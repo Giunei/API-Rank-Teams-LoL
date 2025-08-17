@@ -112,3 +112,14 @@ func (r *TeamRepository) FindPlayerByID(ctx context.Context, playerID int64) (do
 
 	return player, err
 }
+
+func (r *TeamRepository) FindAllPlayersByTeamID(ctx context.Context, teamID int64) ([]domain.Player, error) {
+	var players []domain.Player
+	query := `
+		SELECT id, gamer_name, tag_line
+		FROM player
+		WHERE team_id = $1
+	`
+	err := r.Db.SelectContext(ctx, &players, query, teamID)
+	return players, err
+}

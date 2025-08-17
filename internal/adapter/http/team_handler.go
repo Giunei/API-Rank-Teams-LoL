@@ -50,18 +50,25 @@ func RegisterTeamRoutes(router *gin.Engine, svc *usecase.TeamService) {
 	router.GET("/players", func(c *gin.Context) {
 		ctx := context.Background()
 		gamerName := c.Query("gamer_name")
-		if gamerName == "" {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "gamer_name query parameter is required"})
-			return
+		teamID := c.Query("team_id")
+		if teamID != "" {
+			players, err := svc.GetAllPlayersByTeamID(ctx, teamID)
+			if err != nil {
+				c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+				return
+			}
+			c.JSON(http.StatusOK, players)
 		}
 
-		players, err := svc.GetPlayersByGamerName(ctx, gamerName)
-		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-			return
-		}
+		if gamerName != "" {
+			players, err := svc.GetPlayersByGamerName(ctx, gamerName)
+			if err != nil {
+				c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+				return
+			}
 
-		c.JSON(http.StatusOK, players)
+			c.JSON(http.StatusOK, players)
+		}
 	})
 
 	router.GET("/players/:id/winrate", func(c *gin.Context) {
@@ -76,6 +83,7 @@ func RegisterTeamRoutes(router *gin.Engine, svc *usecase.TeamService) {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 			return
 		}
+		fmt.Printf("Winrate player: %.1f%%\n", result)
 		c.JSON(http.StatusOK, gin.H{"winrate": result})
 	})
 
@@ -93,4 +101,5 @@ func RegisterTeamRoutes(router *gin.Engine, svc *usecase.TeamService) {
 		}
 		c.JSON(http.StatusOK, gin.H{"winrate": result})
 	})
+
 }
